@@ -16,15 +16,15 @@ const configFilePath = path.join(process.cwd(), "image-metadata-config.json");
 
 // Default configuration
 const defaultConfig = {
-  inputDir: '',
-  outputDir: '',
+  inputDir: "",
+  outputDir: "",
   maxTitleChars: 200,
   maxTags: 45,
-  gptApiKey: '',
-  geminiApiKey: '',
-  aiModel: 'gemini', // default AI model
-  geminiModel: 'gemini-1.5-flash', // default Gemini model
-  gptModel: 'gpt-4-vision-preview', // default GPT model
+  gptApiKey: "",
+  geminiApiKey: "",
+  aiModel: "gemini", // default AI model
+  geminiModel: "gemini-1.5-flash", // default Gemini model
+  gptModel: "gpt-4-vision-preview", // default GPT model
   showTokens: true, // default to showing token usage
 };
 
@@ -140,10 +140,11 @@ async function generateMetadataWithGPT(
       messages: [
         {
           role: "system",
-          content: `You are an expert at generating stock photo metadata.
-          Analyze the provided image and create a JSON response with a title (max ${maxTitleChars} characters)
-          and tags (max ${maxTags} tags) that would be appropriate for microstock platforms like Adobe Stock and Shutterstock.
-          Format the response as valid JSON with "title" and "tags" fields. Tags should be an array of strings.`,
+          content: `Generate stock image metadata. Return in this exact format:
+          {"title": "MINIMUM 150 chars and MAXIMUM ${maxTitleChars} chars commercial title",
+          "tags": [EXACTLY ${maxTags} unique commercial keywords]}
+
+          Important: Title MINIMUM 150 chars and MAXIMUM ${maxTitleChars} chars, Tags MUST BE EXACTLY ${maxTags} keywords (no more, no less), NO SYMBOLS OR PUNCTUATION`,
         },
         {
           role: "user",
@@ -168,7 +169,7 @@ async function generateMetadataWithGPT(
     const tokensUsed = {
       prompt: response.usage.prompt_tokens,
       completion: response.usage.completion_tokens,
-      total: response.usage.total_tokens
+      total: response.usage.total_tokens,
     };
 
     // Extract JSON from the response
@@ -187,9 +188,12 @@ async function generateMetadataWithGPT(
       }
     }
 
+    // Validate metadata
+    metadata = validateAndFixMetadata(metadata, maxTitleChars, maxTags);
+
     // Add token usage information to metadata
     metadata.tokenInfo = tokensUsed;
-    
+
     spinner.succeed("Metadata generated successfully with GPT");
     return metadata;
   } catch (error) {
@@ -220,12 +224,13 @@ async function generateMetadataWithGemini(
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: config.geminiModel });
 
-    const prompt = `You are an expert at generating stock photo metadata.
-                   Analyze the provided image and create a JSON response with a title (max ${maxTitleChars} characters)
-                   and tags (max ${maxTags} tags) that would be appropriate for microstock platforms like Adobe Stock and Shutterstock.
-                   Format the response as valid JSON with "title" and "tags" fields. Tags should be an array of strings.`;
+    const prompt = `Generate stock image metadata. Return in this exact format:
+    {"title": "MINIMUM 150 chars and MAXIMUM ${maxTitleChars} chars commercial title",
+    "tags": [EXACTLY ${maxTags} unique commercial keywords]}
 
-    const imageBuffer = Buffer.from(base64Image, "base64");
+    Important: Title MUST BE MINIMUM 150 chars and MAXIMUM ${maxTitleChars} chars, Tags MUST BE EXACTLY ${maxTags} keywords (no more, no less), NO SYMBOLS OR PUNCTUATION`;
+
+    // const imageBuffer = Buffer.from(base64Image, "base64");
 
     const imagePart = {
       inlineData: {
@@ -235,20 +240,20 @@ async function generateMetadataWithGemini(
     };
 
     const result = await model.generateContent([prompt, imagePart]);
-    const response = await result.response;
+    const response = result.response;
     const metadataText = response.text();
-    
+
     // Get token usage if available
     let tokensUsed = null;
     try {
       if (response.usageMetadata) {
         tokensUsed = {
           prompt: response.usageMetadata.promptTokenCount || 0,
-          total: response.usageMetadata.totalTokenCount || 0
+          total: response.usageMetadata.totalTokenCount || 0,
         };
       }
     } catch (e) {
-      console.log(chalk.yellow('Could not retrieve token usage information'));
+      console.log(chalk.yellow("Could not retrieve token usage information"));
     }
 
     // Extract JSON from the response
@@ -266,7 +271,10 @@ async function generateMetadataWithGemini(
         throw new Error("Could not parse Gemini response as JSON");
       }
     }
-    
+
+    // Validate metadata
+    metadata = validateAndFixMetadata(metadata, maxTitleChars, maxTags);
+
     // Add token usage information to metadata if available
     if (tokensUsed) {
       metadata.tokenInfo = tokensUsed;
@@ -282,23 +290,28 @@ async function generateMetadataWithGemini(
 
 // Function to write metadata to image
 async function writeMetadataToImage(imagePath, outputPath, metadata) {
-  const spinner = ora('Writing metadata to image...').start();
-  
+  const spinner = ora("Writing metadata to image...").start();
+
   try {
     // Create output directory if it doesn't exist
     await fsExtra.ensureDir(path.dirname(outputPath));
-    
+
     // Copy image to output directory
     await fsExtra.copy(imagePath, outputPath);
-    
+
     // Write metadata to image
-    await exiftool.write(outputPath, {
-      Title: metadata.title,
-      Description: metadata.title, // Use title as description
-      Keywords: metadata.tags,
-    }, ['-overwrite_original']); // Add flag to avoid creating backup files
-    
-    spinner.succeed('Metadata written successfully');
+    await exiftool.write(
+      outputPath,
+      {
+        Title: metadata.title,
+        Description: metadata.title, // Use title as description
+        Keywords: metadata.tags,
+        Subject: metadata.tags.join(", "), // Use tags as subject
+      },
+      ["-overwrite_original"],
+    ); // Add flag to avoid creating backup files
+
+    spinner.succeed("Metadata written successfully");
     return true;
   } catch (error) {
     spinner.fail(`Failed to write metadata: ${error.message}`);
@@ -366,10 +379,14 @@ async function processAllImages(
         await writeMetadataToImage(imagePath, outputPath, metadata);
 
         console.log(chalk.green(`✓ Processed: ${file}`));
-        console.log(chalk.green(`  Title: ${metadata.title} (${metadata.title.length} chars)`));
+        console.log(
+          chalk.green(
+            `  Title: ${metadata.title} (${metadata.title.length} chars)`,
+          ),
+        );
         console.log(chalk.green(`  Tags: ${metadata.tags.length} keywords`));
         console.log(chalk.green(`  Tags: ${metadata.tags.join(", ")}`));
-        
+
         // Display token usage if available
         if (config.showTokens && metadata.tokenInfo) {
           console.log(chalk.blue(`  Token usage:`));
@@ -377,7 +394,16 @@ async function processAllImages(
             console.log(chalk.blue(`    ${key}: ${value}`));
           });
         }
-        
+
+        // Provide feedback on title length
+        if (metadata.title.length < 150) {
+          console.log(
+            chalk.yellow(
+              `  Note: Title length (${metadata.title.length}) is shorter than recommended minimum (150 chars).`,
+            ),
+          );
+        }
+
         successCount++;
       } catch (error) {
         console.error(
@@ -410,11 +436,14 @@ async function showMainMenu() {
           { name: "📁 Set output directory", value: "setOutputDir" },
           { name: "📏 Set max title characters", value: "setMaxTitleChars" },
           { name: "🏷️ Set max tags", value: "setMaxTags" },
-          { name: '🔑 Set API keys', value: 'setApiKeys' },
-          { name: '🤖 Select AI to Use', value: 'selectAiModel' },
-          { name: '📊 Select Model to Use', value: 'selectSpecificModel' },
-          { name: '🔢 Toggle token usage display', value: 'toggleTokenDisplay' },
-          { name: '▶️ Process images', value: 'processImages' },
+          { name: "🔑 Set API keys", value: "setApiKeys" },
+          { name: "🤖 Select AI to Use", value: "selectAiModel" },
+          { name: "📊 Select Model to Use", value: "selectSpecificModel" },
+          {
+            name: "🔢 Toggle token usage display",
+            value: "toggleTokenDisplay",
+          },
+          { name: "▶️ Process images", value: "processImages" },
           { name: "❌ Exit", value: "exit" },
         ],
       },
@@ -436,16 +465,16 @@ async function showMainMenu() {
       case "setApiKeys":
         await setApiKeys();
         break;
-      case 'selectAiModel':
+      case "selectAiModel":
         await selectAiModel();
         break;
-      case 'selectSpecificModel':
+      case "selectSpecificModel":
         await selectSpecificModel();
         break;
-      case 'toggleTokenDisplay':
+      case "toggleTokenDisplay":
         await toggleTokenDisplay();
         break;
-      case 'processImages':
+      case "processImages":
         await processImages();
         break;
       case "exit":
@@ -585,57 +614,100 @@ async function setApiKeys() {
 async function selectAiModel() {
   const answers = await inquirer.prompt([
     {
-      type: 'list',
-      name: 'aiModel',
-      message: 'Select the AI to use:',
+      type: "list",
+      name: "aiModel",
+      message: "Select the AI to use:",
       choices: [
-        { name: 'OpenAI GPT', value: 'gpt' },
-        { name: 'Google Gemini', value: 'gemini' }
+        { name: "OpenAI GPT", value: "gpt" },
+        { name: "Google Gemini", value: "gemini" },
       ],
-      default: config.aiModel
-    }
+      default: config.aiModel,
+    },
   ]);
-  
+
   config.aiModel = answers.aiModel;
   saveConfig();
-  console.log(chalk.green(`AI set to: ${answers.aiModel === 'gpt' ? 'OpenAI GPT' : 'Google Gemini'}`));
+  console.log(
+    chalk.green(
+      `AI set to: ${answers.aiModel === "gpt" ? "OpenAI GPT" : "Google Gemini"}`,
+    ),
+  );
+}
+
+// Validate and fix metadata to ensure it meets requirements
+function validateAndFixMetadata(metadata, maxTitleChars, maxTags) {
+  // Make a copy to avoid modifying the original
+  const validatedMetadata = { ...metadata };
+
+  // Validate title
+  if (!validatedMetadata.title || typeof validatedMetadata.title !== "string") {
+    validatedMetadata.title = "Untitled Image";
+    console.log(chalk.red("Error: AI did not return a valid title."));
+  }
+
+  // Validate tags
+  if (!validatedMetadata.tags || !Array.isArray(validatedMetadata.tags)) {
+    validatedMetadata.tags = [];
+    console.log(chalk.red("Error: AI did not return any valid tags."));
+  }
+
+  // Ensure all tags are strings and remove duplicates
+  const uniqueTags = new Set();
+  validatedMetadata.tags.forEach((tag) => {
+    if (typeof tag === "string" && tag.trim()) {
+      uniqueTags.add(tag.trim().toLowerCase());
+    }
+  });
+
+  // Convert set back to array
+  validatedMetadata.tags = Array.from(uniqueTags);
+
+  // Trim tags list if it exceeds max count
+  if (validatedMetadata.tags.length > maxTags) {
+    // If we have too many tags, trim to the exact count
+    validatedMetadata.tags = validatedMetadata.tags.slice(0, maxTags);
+  }
+
+  // No category validation needed
+
+  return validatedMetadata;
 }
 
 // Select specific model based on AI provider
 async function selectSpecificModel() {
-  if (config.aiModel === 'gemini') {
+  if (config.aiModel === "gemini") {
     const answers = await inquirer.prompt([
       {
-        type: 'list',
-        name: 'geminiModel',
-        message: 'Select the Gemini model to use:',
+        type: "list",
+        name: "geminiModel",
+        message: "Select the Gemini model to use:",
         choices: [
-          { name: 'Gemini 1.5 Flash', value: 'gemini-1.5-flash' },
-          { name: 'Gemini 1.5 Pro', value: 'gemini-1.5-pro' }
+          { name: "Gemini 1.5 Flash", value: "gemini-1.5-flash" },
+          { name: "Gemini 1.5 Pro", value: "gemini-1.5-pro" },
         ],
-        default: config.geminiModel
-      }
+        default: config.geminiModel,
+      },
     ]);
-    
+
     config.geminiModel = answers.geminiModel;
     saveConfig();
     console.log(chalk.green(`Gemini model set to: ${answers.geminiModel}`));
   } else {
     const answers = await inquirer.prompt([
       {
-        type: 'list',
-        name: 'gptModel',
-        message: 'Select the GPT model to use:',
+        type: "list",
+        name: "gptModel",
+        message: "Select the GPT model to use:",
         choices: [
-          { name: 'GPT-4 Vision', value: 'gpt-4-vision-preview' },
-          { name: 'GPT-4.1-mini', value: 'gpt-4.1-mini' },
-          { name: 'GPT-4.1-nano', value: 'gpt-4.1-nano' },
-          { name: 'o4-mini', value: 'o4-mini' }
+          { name: "GPT-4 Vision", value: "gpt-4-vision-preview" },
+          { name: "GPT-4.1-mini", value: "gpt-4.1-mini" },
+          { name: "GPT-4.1-nano", value: "gpt-4.1-nano" },
+          { name: "o4-mini", value: "o4-mini" },
         ],
-        default: config.gptModel
-      }
+        default: config.gptModel,
+      },
     ]);
-    
+
     config.gptModel = answers.gptModel;
     saveConfig();
     console.log(chalk.green(`GPT model set to: ${answers.gptModel}`));
@@ -646,7 +718,11 @@ async function selectSpecificModel() {
 async function toggleTokenDisplay() {
   config.showTokens = !config.showTokens;
   saveConfig();
-  console.log(chalk.green(`Token usage display: ${config.showTokens ? 'Enabled' : 'Disabled'}`));
+  console.log(
+    chalk.green(
+      `Token usage display: ${config.showTokens ? "Enabled" : "Disabled"}`,
+    ),
+  );
 }
 
 // Process images

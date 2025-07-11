@@ -5,11 +5,12 @@ A command-line tool for automatically generating and embedding metadata for stoc
 ## Features
 
 - Interactive CLI menu with colorful interface
-- Automatic title and tag generation using AI
+- Automatic title and tags generation using AI
 - Support for both OpenAI GPT and Google Gemini with selectable models
   - Gemini: gemini-1.5-flash, gemini-1.5-pro
   - GPT: gpt-4-vision-preview, gpt-4.1-mini, gpt-4.1-nano, o4-mini
 - Image compression before sending to AI APIs
+- Token-efficient AI prompts optimized for microstock platforms with precise format
 - Token usage tracking and display for AI requests
 - Character count and keyword statistics
 - Persistent configuration saved in a JSON file
@@ -69,10 +70,11 @@ image-metadata-cli
 
 1. The tool reads images from your input directory
 2. Each image is compressed and resized to 300px on the longest side before sending to AI
-3. The selected AI model generates a title and tags based on the image content
-4. The tool displays token usage statistics, title character count, and number of keywords
-5. Metadata is embedded in the image using exiftool
-6. The processed image is saved to the output directory
+3. The selected AI model generates a high-quality title and tags optimized for microstock platforms
+4. Metadata is lightly validated (removes duplicates and trims excess tags if needed)
+5. The tool displays token usage statistics, title character count, and number of keywords
+6. Metadata is embedded in the image using exiftool (title and tags)
+7. The processed image is saved to the output directory
 
 ### Configuration
 
