@@ -6,7 +6,9 @@ A command-line tool for automatically generating and embedding metadata for stoc
 
 - Interactive CLI menu with colorful interface
 - Automatic title and tag generation using AI
-- Support for both OpenAI GPT and Google Gemini
+- Support for both OpenAI GPT and Google Gemini with selectable models
+  - Gemini: gemini-1.5-flash, gemini-1.5-pro
+  - GPT: gpt-4-vision-preview, gpt-4.1-mini, gpt-4.1-nano, o4-mini
 - Image compression before sending to AI APIs
 - Persistent configuration saved in a JSON file
 - Metadata embedding using exiftool
@@ -56,13 +58,14 @@ image-metadata-cli
 2. Set the output directory where processed images will be saved
 3. Configure max title characters (default: 200) and max tags (default: 45)
 4. Enter your API keys for OpenAI and/or Google Gemini
-5. Select which AI model to use
-6. Process your images
+5. Select which AI to use (GPT or Gemini)
+6. Select specific model for the chosen AI
+7. Process your images
 
 ### How It Works
 
 1. The tool reads images from your input directory
-2. Each image is compressed to reduce size before sending to AI
+2. Each image is compressed and resized to 300px on the longest side before sending to AI
 3. The selected AI model generates a title and tags based on the image content
 4. Metadata is embedded in the image using exiftool
 5. The processed image is saved to the output directory
@@ -74,7 +77,8 @@ Your settings are saved in a `image-metadata-config.json` file in the directory 
 - Input and output directories
 - API keys
 - Maximum title characters and tags
-- Selected AI model
+- Selected AI provider (GPT or Gemini)
+- Selected model for each AI provider
 
 ## API Keys
 

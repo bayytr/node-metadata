@@ -16,13 +16,15 @@ const configFilePath = path.join(process.cwd(), "image-metadata-config.json");
 
 // Default configuration
 const defaultConfig = {
-  inputDir: "",
-  outputDir: "",
+  inputDir: '',
+  outputDir: '',
   maxTitleChars: 200,
   maxTags: 45,
-  gptApiKey: "",
-  geminiApiKey: "",
-  aiModel: "gemini", // default AI model
+  gptApiKey: '',
+  geminiApiKey: '',
+  aiModel: 'gemini', // default AI model
+  geminiModel: 'gemini-1.5-flash', // default Gemini model
+  gptModel: 'gpt-4-vision-preview', // default GPT model
 };
 
 // Load or create configuration
@@ -85,7 +87,7 @@ async function compressImage(imagePath) {
     );
 
     await sharp(imagePath)
-      .resize(1200) // Resize to max 1200px on longest side
+      .resize(300) // Resize to max 300px on longest side
       .jpeg({ quality: 80 }) // Compress quality
       .toFile(tempFilePath);
 
@@ -133,7 +135,7 @@ async function generateMetadataWithGPT(
     });
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4-vision-preview",
+      model: config.gptModel,
       messages: [
         {
           role: "system",
@@ -207,7 +209,7 @@ async function generateMetadataWithGemini(
 
     // Initialize Gemini API
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: config.geminiModel });
 
     const prompt = `You are an expert at generating stock photo metadata.
                    Analyze the provided image and create a JSON response with a title (max ${maxTitleChars} characters)
@@ -372,9 +374,10 @@ async function showMainMenu() {
           { name: "📁 Set output directory", value: "setOutputDir" },
           { name: "📏 Set max title characters", value: "setMaxTitleChars" },
           { name: "🏷️ Set max tags", value: "setMaxTags" },
-          { name: "🔑 Set API keys", value: "setApiKeys" },
-          { name: "🤖 Select AI model", value: "selectAiModel" },
-          { name: "▶️ Process images", value: "processImages" },
+          { name: '🔑 Set API keys', value: 'setApiKeys' },
+          { name: '🤖 Select AI to Use', value: 'selectAiModel' },
+          { name: '📊 Select Model to Use', value: 'selectSpecificModel' },
+          { name: '▶️ Process images', value: 'processImages' },
           { name: "❌ Exit", value: "exit" },
         ],
       },
@@ -396,10 +399,13 @@ async function showMainMenu() {
       case "setApiKeys":
         await setApiKeys();
         break;
-      case "selectAiModel":
+      case 'selectAiModel':
         await selectAiModel();
         break;
-      case "processImages":
+      case 'selectSpecificModel':
+        await selectSpecificModel();
+        break;
+      case 'processImages':
         await processImages();
         break;
       case "exit":
@@ -539,24 +545,61 @@ async function setApiKeys() {
 async function selectAiModel() {
   const answers = await inquirer.prompt([
     {
-      type: "list",
-      name: "aiModel",
-      message: "Select the AI model to use:",
+      type: 'list',
+      name: 'aiModel',
+      message: 'Select the AI to use:',
       choices: [
-        { name: "OpenAI GPT", value: "gpt" },
-        { name: "Google Gemini", value: "gemini" },
+        { name: 'OpenAI GPT', value: 'gpt' },
+        { name: 'Google Gemini', value: 'gemini' }
       ],
-      default: config.aiModel,
-    },
+      default: config.aiModel
+    }
   ]);
-
+  
   config.aiModel = answers.aiModel;
   saveConfig();
-  console.log(
-    chalk.green(
-      `AI model set to: ${answers.aiModel === "gpt" ? "OpenAI GPT" : "Google Gemini"}`,
-    ),
-  );
+  console.log(chalk.green(`AI set to: ${answers.aiModel === 'gpt' ? 'OpenAI GPT' : 'Google Gemini'}`));
+}
+
+// Select specific model based on AI provider
+async function selectSpecificModel() {
+  if (config.aiModel === 'gemini') {
+    const answers = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'geminiModel',
+        message: 'Select the Gemini model to use:',
+        choices: [
+          { name: 'Gemini 1.5 Flash', value: 'gemini-1.5-flash' },
+          { name: 'Gemini 1.5 Pro', value: 'gemini-1.5-pro' }
+        ],
+        default: config.geminiModel
+      }
+    ]);
+    
+    config.geminiModel = answers.geminiModel;
+    saveConfig();
+    console.log(chalk.green(`Gemini model set to: ${answers.geminiModel}`));
+  } else {
+    const answers = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'gptModel',
+        message: 'Select the GPT model to use:',
+        choices: [
+          { name: 'GPT-4 Vision', value: 'gpt-4-vision-preview' },
+          { name: 'GPT-4.1-mini', value: 'gpt-4.1-mini' },
+          { name: 'GPT-4.1-nano', value: 'gpt-4.1-nano' },
+          { name: 'o4-mini', value: 'o4-mini' }
+        ],
+        default: config.gptModel
+      }
+    ]);
+    
+    config.gptModel = answers.gptModel;
+    saveConfig();
+    console.log(chalk.green(`GPT model set to: ${answers.gptModel}`));
+  }
 }
 
 // Process images
