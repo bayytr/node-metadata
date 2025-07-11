@@ -25,6 +25,7 @@ const defaultConfig = {
   aiModel: 'gemini', // default AI model
   geminiModel: 'gemini-1.5-flash', // default Gemini model
   gptModel: 'gpt-4-vision-preview', // default GPT model
+  showTokens: true, // default to showing token usage
 };
 
 // Load or create configuration
@@ -164,6 +165,11 @@ async function generateMetadataWithGPT(
     });
 
     const metadataText = response.choices[0].message.content;
+    const tokensUsed = {
+      prompt: response.usage.prompt_tokens,
+      completion: response.usage.completion_tokens,
+      total: response.usage.total_tokens
+    };
 
     // Extract JSON from the response
     const jsonMatch =
@@ -181,6 +187,9 @@ async function generateMetadataWithGPT(
       }
     }
 
+    // Add token usage information to metadata
+    metadata.tokenInfo = tokensUsed;
+    
     spinner.succeed("Metadata generated successfully with GPT");
     return metadata;
   } catch (error) {
@@ -228,6 +237,19 @@ async function generateMetadataWithGemini(
     const result = await model.generateContent([prompt, imagePart]);
     const response = await result.response;
     const metadataText = response.text();
+    
+    // Get token usage if available
+    let tokensUsed = null;
+    try {
+      if (response.usageMetadata) {
+        tokensUsed = {
+          prompt: response.usageMetadata.promptTokenCount || 0,
+          total: response.usageMetadata.totalTokenCount || 0
+        };
+      }
+    } catch (e) {
+      console.log(chalk.yellow('Could not retrieve token usage information'));
+    }
 
     // Extract JSON from the response
     const jsonMatch =
@@ -243,6 +265,11 @@ async function generateMetadataWithGemini(
       } catch (e) {
         throw new Error("Could not parse Gemini response as JSON");
       }
+    }
+    
+    // Add token usage information to metadata if available
+    if (tokensUsed) {
+      metadata.tokenInfo = tokensUsed;
     }
 
     spinner.succeed("Metadata generated successfully with Gemini");
@@ -339,9 +366,18 @@ async function processAllImages(
         await writeMetadataToImage(imagePath, outputPath, metadata);
 
         console.log(chalk.green(`✓ Processed: ${file}`));
-        console.log(chalk.green(`  Title: ${metadata.title}`));
+        console.log(chalk.green(`  Title: ${metadata.title} (${metadata.title.length} chars)`));
+        console.log(chalk.green(`  Tags: ${metadata.tags.length} keywords`));
         console.log(chalk.green(`  Tags: ${metadata.tags.join(", ")}`));
-
+        
+        // Display token usage if available
+        if (config.showTokens && metadata.tokenInfo) {
+          console.log(chalk.blue(`  Token usage:`));
+          Object.entries(metadata.tokenInfo).forEach(([key, value]) => {
+            console.log(chalk.blue(`    ${key}: ${value}`));
+          });
+        }
+        
         successCount++;
       } catch (error) {
         console.error(
@@ -377,6 +413,7 @@ async function showMainMenu() {
           { name: '🔑 Set API keys', value: 'setApiKeys' },
           { name: '🤖 Select AI to Use', value: 'selectAiModel' },
           { name: '📊 Select Model to Use', value: 'selectSpecificModel' },
+          { name: '🔢 Toggle token usage display', value: 'toggleTokenDisplay' },
           { name: '▶️ Process images', value: 'processImages' },
           { name: "❌ Exit", value: "exit" },
         ],
@@ -404,6 +441,9 @@ async function showMainMenu() {
         break;
       case 'selectSpecificModel':
         await selectSpecificModel();
+        break;
+      case 'toggleTokenDisplay':
+        await toggleTokenDisplay();
         break;
       case 'processImages':
         await processImages();
@@ -600,6 +640,13 @@ async function selectSpecificModel() {
     saveConfig();
     console.log(chalk.green(`GPT model set to: ${answers.gptModel}`));
   }
+}
+
+// Toggle token display
+async function toggleTokenDisplay() {
+  config.showTokens = !config.showTokens;
+  saveConfig();
+  console.log(chalk.green(`Token usage display: ${config.showTokens ? 'Enabled' : 'Disabled'}`));
 }
 
 // Process images
