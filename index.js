@@ -73,31 +73,29 @@ function displayCurrentConfig() {
     : chalk.yellow("Not set");
 
   console.log(
-    chalk.cyan.bold("┌─────────────── CURRENT CONFIGURATION ───────────────┐"),
+    chalk.cyan.bold("─────────────── CURRENT CONFIGURATION ───────────────"),
   );
-  console.log(chalk.cyan(`│ Input Directory:   ${inputStatus}`));
-  console.log(chalk.cyan(`│ Output Directory:  ${outputStatus}`));
+  console.log(chalk.cyan(`Input Directory:   ${inputStatus}`));
+  console.log(chalk.cyan(`Output Directory:  ${outputStatus}`));
   console.log(
-    chalk.cyan(`│ Max Title Chars:   ${chalk.green(config.maxTitleChars)}`),
+    chalk.cyan(`Max Title Chars:   ${chalk.green(config.maxTitleChars)}`),
   );
-  console.log(
-    chalk.cyan(`│ Max Tags:          ${chalk.green(config.maxTags)}`),
-  );
+  console.log(chalk.cyan(`Max Tags:          ${chalk.green(config.maxTags)}`));
   console.log(
     chalk.cyan(
-      `│ AI Provider:       ${config.aiModel === "gpt" ? chalk.blue("OpenAI GPT") : chalk.green("Google Gemini")}`,
+      `AI Provider:       ${config.aiModel === "gpt" ? chalk.blue("OpenAI GPT") : chalk.green("Google Gemini")}`,
     ),
   );
   const modelName =
     config.aiModel === "gpt" ? config.gptModel : config.geminiModel;
-  console.log(chalk.cyan(`│ AI Model:          ${chalk.magenta(modelName)}`));
+  console.log(chalk.cyan(`AI Model:          ${chalk.magenta(modelName)}`));
   console.log(
     chalk.cyan(
-      `│ Show Token Usage:  ${config.showTokens ? chalk.green("Enabled") : chalk.yellow("Disabled")}`,
+      `Show Token Usage:  ${config.showTokens ? chalk.green("Enabled") : chalk.yellow("Disabled")}`,
     ),
   );
   console.log(
-    chalk.cyan.bold("└───────────────────────────────────────────────────┘"),
+    chalk.cyan.bold("─────────────────────────────────────────────────────"),
   );
   console.log("");
 }
@@ -263,16 +261,24 @@ async function generateMetadataWithGemini(
     const model = genAI.getGenerativeModel({
       model: config.geminiModel,
       generationConfig: {
-        temperature: 0.4, // Lower temperature for more consistent results
-        topP: 0.6, // Diverse but focused output
+        temperature: 0.8, // Lower temperature for more consistent results
+        topP: 0.8, // Diverse but focused output
       },
     });
 
-    const prompt = `Generate stock image metadata. Return in this exact format:
-    {"title": "EXACTLY IN RANGE OF 150 chars (no LESS than that since its CRITICAL) UNTIL ${maxTitleChars} chars (no MORE than that since its CRITICAL) commercial title",
-    "tags": [EXACTLY ${maxTags} unique commercial keywords]}
+    const prompt = `You are a generator of stock image metadata. Follow these rules EXACTLY:
 
-    Important: Title MUST BE IN RANGE of 150 chars (no LESS than that since its CRITICAL) UNTIL ${maxTitleChars} chars (no MORE than that since its CRITICAL), Tags MUST BE EXACTLY ${maxTags} keywords (no more, no less), NO SYMBOLS OR PUNCTUATION`;
+    1. Output format MUST be valid JSON:
+    {
+      "title": "Your generated title here",
+      "tags": ["tag1", "tag2", ..., "tag${maxTags}"]
+    }
+    2. "title" MUST be EXACTLY ${maxTitleChars} characters long — including spaces. This is NON-NEGOTIABLE.
+       - Write a commercial friendly title, fluent sentence that ends precisely at ${maxTitleChars} characters.
+    3. "tags" MUST contain EXACTLY ${maxTags} individual, relevant commercial keywords.
+       - No duplicates, no punctuation, no symbols, just clean lowercase words.
+    4. DO NOT return anything except the JSON object. No explanation. No extra output.
+    Repeat: This is a hard requirement. Output must be strictly ${maxTitleChars} characters in the title, and exactly ${maxTags} keywords.`;
 
     // const imageBuffer = Buffer.from(base64Image, "base64");
 
@@ -355,11 +361,15 @@ async function writeMetadataToImage(imagePath, outputPath, metadata) {
       ["-overwrite_original"],
     ); // Add flag to avoid creating backup files
 
+    // Delete original image if success write metadata to image
+    // await fs.promises.unlink(imagePath);
+
     spinner.succeed("Metadata written successfully");
     return true;
   } catch (error) {
     spinner.fail(`Failed to write metadata: ${error.message}`);
     throw error;
+    // return false; // Return false to indicate failure
   }
 }
 
@@ -390,27 +400,25 @@ async function processAllImages(
 
     if (imageFiles.length === 0) {
       console.log(
-        chalk.yellow.bold(`\n┌─────────────── WARNING ────────────────┐`),
+        chalk.yellow.bold(`\n─────────────── WARNING ────────────────`),
       );
+      console.log(chalk.yellow(`No image files found in the input directory.`));
       console.log(
-        chalk.yellow(`│ No image files found in the input directory.`),
-      );
-      console.log(
-        chalk.yellow.bold(`└────────────────────────────────────────┘\n`),
+        chalk.yellow.bold(`────────────────────────────────────────\n`),
       );
       return;
     }
 
     console.log(
-      chalk.blue.bold(`\n┌─────────────── PROCESSING IMAGES ────────────────┐`),
+      chalk.blue.bold(`\n─────────────── PROCESSING IMAGES ─────────────────`),
     );
     console.log(
       chalk.blue(
-        `│ Found ${chalk.green(imageFiles.length)} image files to process.`,
+        `Found ${chalk.green(imageFiles.length)} image files to process.`,
       ),
     );
     console.log(
-      chalk.blue.bold(`└───────────────────────────────────────────────┘\n`),
+      chalk.blue.bold(`───────────────────────────────────────────────────\n`),
     );
 
     let successCount = 0;
@@ -445,7 +453,16 @@ async function processAllImages(
         }
 
         // Write metadata to image
-        await writeMetadataToImage(imagePath, outputPath, metadata);
+        const success = await writeMetadataToImage(
+          imagePath,
+          outputPath,
+          metadata,
+        );
+
+        if (success) {
+          await fs.promises.unlink(imagePath); // Delete original image if metadata was written successfully
+          console.log(chalk.redBright(`✓ Original image deleted successfully`));
+        }
 
         console.log(chalk.green(`✓ Processed: ${file}`));
         console.log(
@@ -465,7 +482,7 @@ async function processAllImages(
         }
 
         // Provide feedback on title length
-        if (metadata.title.length < 150) {
+        if (metadata.title.length < 100) {
           console.log(
             chalk.yellow(
               `  ⚠️ Note: Title length (${metadata.title.length}) is shorter than recommended minimum (150 chars).`,
@@ -484,9 +501,9 @@ async function processAllImages(
       }
     }
   } catch (error) {
-    console.log(chalk.red.bold(`\n┌─────────────── ERROR ────────────────┐`));
-    console.log(chalk.red(`│ Error processing images: ${error.message}`));
-    console.log(chalk.red.bold(`└───────────────────────────────────────┘\n`));
+    console.log(chalk.red.bold(`\n─────────────── ERROR ────────────────`));
+    console.log(chalk.red(`Error processing images: ${error.message}`));
+    console.log(chalk.red.bold(`───────────────────────────────────────\n`));
   }
 
   return stats;
@@ -532,10 +549,10 @@ async function showMainMenu() {
           chalk.cyan.bold("\n┌─────────────────────────────────────────┐"),
         );
         console.log(
-          chalk.cyan.bold("│  Thank you for using Image Metadata CLI  │"),
+          chalk.cyan.bold("│  Thank you for using Image Metadata CLI │"),
         );
         console.log(
-          chalk.cyan.bold("│              Goodbye!                    │"),
+          chalk.cyan.bold("│              Goodbye!                   │"),
         );
         console.log(
           chalk.cyan.bold("└─────────────────────────────────────────┘\n"),
@@ -568,15 +585,15 @@ async function setInputDirectory() {
   saveConfig();
   console.log(
     chalk.cyan.bold(
-      `\n┌─────────────── INPUT DIRECTORY UPDATED ────────────────┐`,
+      `\n─────────────── INPUT DIRECTORY UPDATED ────────────────`,
     ),
   );
   console.log(
-    chalk.cyan(`│ Input directory set to: ${chalk.green(answers.inputDir)}`),
+    chalk.cyan(`Input directory set to: ${chalk.green(answers.inputDir)}`),
   );
   console.log(
     chalk.cyan.bold(
-      `└───────────────────────────────────────────────────────┘\n`,
+      `────────────────────────────────────────────────────────\n`,
     ),
   );
 }
@@ -609,7 +626,7 @@ async function setOutputDirectory() {
   saveConfig();
   console.log(
     chalk.cyan.bold(
-      `\n┌─────────────── OUTPUT DIRECTORY UPDATED ────────────────┐`,
+      `\n─────────────── OUTPUT DIRECTORY UPDATED ────────────────`,
     ),
   );
   console.log(
@@ -617,7 +634,7 @@ async function setOutputDirectory() {
   );
   console.log(
     chalk.cyan.bold(
-      `└────────────────────────────────────────────────────────┘\n`,
+      `─────────────────────────────────────────────────────────\n`,
     ),
   );
 }
@@ -642,17 +659,15 @@ async function setMaxTitleChars() {
   config.maxTitleChars = answers.maxTitleChars;
   saveConfig();
   console.log(
-    chalk.cyan.bold(
-      `\n┌─────────────── TITLE LENGTH UPDATED ────────────────┐`,
-    ),
+    chalk.cyan.bold(`\n─────────────── TITLE LENGTH UPDATED ────────────────`),
   );
   console.log(
     chalk.cyan(
-      `│ Maximum title characters set to: ${chalk.green(answers.maxTitleChars)}`,
+      `Maximum title characters set to: ${chalk.green(answers.maxTitleChars)}`,
     ),
   );
   console.log(
-    chalk.cyan.bold(`└───────────────────────────────────────────────────┘\n`),
+    chalk.cyan.bold(`─────────────────────────────────────────────────────\n`),
   );
 }
 
@@ -676,13 +691,13 @@ async function setMaxTags() {
   config.maxTags = answers.maxTags;
   saveConfig();
   console.log(
-    chalk.cyan.bold(`\n┌─────────────── TAG COUNT UPDATED ────────────────┐`),
+    chalk.cyan.bold(`\n─────────────── TAG COUNT UPDATED ────────────────`),
   );
   console.log(
-    chalk.cyan(`│ Maximum tags set to: ${chalk.green(answers.maxTags)}`),
+    chalk.cyan(`Maximum tags set to: ${chalk.green(answers.maxTags)}`),
   );
   console.log(
-    chalk.cyan.bold(`└────────────────────────────────────────────────┘\n`),
+    chalk.cyan.bold(`──────────────────────────────────────────────────\n`),
   );
 }
 
@@ -709,11 +724,11 @@ async function setApiKeys() {
   config.geminiApiKey = answers.geminiApiKey;
   saveConfig();
   console.log(
-    chalk.cyan.bold(`\n┌─────────────── API KEYS UPDATED ────────────────┐`),
+    chalk.cyan.bold(`\n─────────────── API KEYS UPDATED ────────────────`),
   );
-  console.log(chalk.cyan(`│ API keys saved successfully`));
+  console.log(chalk.cyan(`API keys saved successfully`));
   console.log(
-    chalk.cyan.bold(`└────────────────────────────────────────────────┘\n`),
+    chalk.cyan.bold(`─────────────────────────────────────────────────\n`),
   );
 }
 
@@ -739,11 +754,11 @@ async function selectAiModel() {
       ? chalk.blue("OpenAI GPT")
       : chalk.green("Google Gemini");
   console.log(
-    chalk.cyan.bold(`\n┌─────────────── AI PROVIDER UPDATED ────────────────┐`),
+    chalk.cyan.bold(`\n─────────────── AI PROVIDER UPDATED ────────────────`),
   );
-  console.log(chalk.cyan(`│ AI Provider set to: ${aiName}`));
+  console.log(chalk.cyan(`AI Provider set to: ${aiName}`));
   console.log(
-    chalk.cyan.bold(`└───────────────────────────────────────────────────┘\n`),
+    chalk.cyan.bold(`────────────────────────────────────────────────────\n`),
   );
 }
 
@@ -808,15 +823,13 @@ async function selectSpecificModel() {
     config.geminiModel = answers.geminiModel;
     saveConfig();
     console.log(
-      chalk.cyan.bold(`\n┌─────────────── MODEL UPDATED ────────────────┐`),
+      chalk.cyan.bold(`\n─────────────── MODEL UPDATED ────────────────`),
     );
     console.log(
-      chalk.cyan(
-        `│ Gemini model set to: ${chalk.magenta(answers.geminiModel)}`,
-      ),
+      chalk.cyan(`Gemini model set to: ${chalk.magenta(answers.geminiModel)}`),
     );
     console.log(
-      chalk.cyan.bold(`└───────────────────────────────────────────────┘\n`),
+      chalk.cyan.bold(`───────────────────────────────────────────────\n`),
     );
   } else {
     const answers = await inquirer.prompt([
@@ -837,13 +850,13 @@ async function selectSpecificModel() {
     config.gptModel = answers.gptModel;
     saveConfig();
     console.log(
-      chalk.cyan.bold(`\n┌─────────────── MODEL UPDATED ────────────────┐`),
+      chalk.cyan.bold(`\n─────────────── MODEL UPDATED ────────────────`),
     );
     console.log(
-      chalk.cyan(`│ GPT model set to: ${chalk.magenta(answers.gptModel)}`),
+      chalk.cyan(`GPT model set to: ${chalk.magenta(answers.gptModel)}`),
     );
     console.log(
-      chalk.cyan.bold(`└───────────────────────────────────────────────┘\n`),
+      chalk.cyan.bold(`───────────────────────────────────────────────\n`),
     );
   }
 }
@@ -853,15 +866,15 @@ async function toggleTokenDisplay() {
   config.showTokens = !config.showTokens;
   saveConfig();
   console.log(
-    chalk.cyan.bold(`\n┌─────────────── TOKEN DISPLAY ────────────────┐`),
+    chalk.cyan.bold(`\n─────────────── TOKEN DISPLAY ────────────────`),
   );
   console.log(
     chalk.cyan(
-      `│ Token usage display: ${config.showTokens ? chalk.green("Enabled") : chalk.yellow("Disabled")}`,
+      `Token usage display: ${config.showTokens ? chalk.green("Enabled") : chalk.yellow("Disabled")}`,
     ),
   );
   console.log(
-    chalk.cyan.bold(`└────────────────────────────────────────────┘\n`),
+    chalk.cyan.bold(`──────────────────────────────────────────────\n`),
   );
 }
 
@@ -876,34 +889,34 @@ async function processImages() {
 
   // Validate configuration
   if (!inputDir || !outputDir) {
-    console.log(chalk.red.bold(`\n┌─────────────── ERROR ────────────────┐`));
+    console.log(chalk.red.bold(`\n─────────────── ERROR ────────────────`));
     console.log(
       chalk.red(
-        `│ Please set both input and output directories before processing.`,
+        `Please set both input and output directories before processing.`,
       ),
     );
-    console.log(chalk.red.bold(`└───────────────────────────────────────┘\n`));
+    console.log(chalk.red.bold(`───────────────────────────────────────\n`));
     return;
   }
 
   const apiKey = aiModel === "gpt" ? config.gptApiKey : config.geminiApiKey;
   if (!apiKey) {
-    console.log(chalk.red.bold(`\n┌─────────────── ERROR ────────────────┐`));
+    console.log(chalk.red.bold(`\n─────────────── ERROR ────────────────`));
     console.log(
       chalk.red(
-        `│ Please set the ${aiModel === "gpt" ? "GPT" : "Gemini"} API key before processing.`,
+        `Please set the ${aiModel === "gpt" ? "GPT" : "Gemini"} API key before processing.`,
       ),
     );
-    console.log(chalk.red.bold(`└───────────────────────────────────────┘\n`));
+    console.log(chalk.red.bold(`───────────────────────────────────────\n`));
     return;
   }
 
   if (!fs.existsSync(inputDir)) {
-    console.log(chalk.red.bold(`\n┌─────────────── ERROR ────────────────┐`));
+    console.log(chalk.red.bold(`\n─────────────── ERROR ────────────────`));
     console.log(
-      chalk.red(`│ Input directory does not exist: ${chalk.yellow(inputDir)}`),
+      chalk.red(`Input directory does not exist: ${chalk.yellow(inputDir)}`),
     );
-    console.log(chalk.red.bold(`└───────────────────────────────────────┘\n`));
+    console.log(chalk.red.bold(`───────────────────────────────────────\n`));
 
     const { tryAgain } = await inquirer.prompt([
       {
@@ -939,11 +952,11 @@ async function processImages() {
   });
 
   if (imageFiles.length === 0) {
-    console.log(chalk.red.bold(`\n┌─────────────── ERROR ────────────────┐`));
+    console.log(chalk.red.bold(`\n─────────────── ERROR ────────────────`));
     console.log(
-      chalk.red(`│ No image files found in: ${chalk.yellow(inputDir)}`),
+      chalk.red(`No image files found in: ${chalk.yellow(inputDir)}`),
     );
-    console.log(chalk.red.bold(`└───────────────────────────────────────┘\n`));
+    console.log(chalk.red.bold(`───────────────────────────────────────\n`));
 
     const { tryAgain } = await inquirer.prompt([
       {
@@ -983,23 +996,17 @@ async function processImages() {
   if (confirmAnswers.proceed) {
     console.clear();
     console.log(
-      chalk.blue.bold(
-        `\n┌─────────────── PROCESSING STARTED ────────────────┐`,
-      ),
+      chalk.blue.bold(`\n─────────────── PROCESSING STARTED ────────────────`),
     );
-    console.log(
-      chalk.blue(`│ Processing images from: ${chalk.green(inputDir)}`),
-    );
-    console.log(chalk.blue(`│ Output directory: ${chalk.green(outputDir)}`));
+    console.log(chalk.blue(`Processing images from: ${chalk.green(inputDir)}`));
+    console.log(chalk.blue(`Output directory: ${chalk.green(outputDir)}`));
     console.log(
       chalk.blue(
-        `│ Using AI: ${chalk.magenta(aiModel === "gpt" ? config.gptModel : config.geminiModel)}`,
+        `Using AI: ${chalk.magenta(aiModel === "gpt" ? config.gptModel : config.geminiModel)}`,
       ),
     );
     console.log(
-      chalk.blue.bold(
-        `└────────────────────────────────────────────────────┘\n`,
-      ),
+      chalk.blue.bold(`───────────────────────────────────────────────────\n`),
     );
 
     const startTime = new Date();
@@ -1020,34 +1027,40 @@ async function processImages() {
     console.clear();
 
     console.log(
-      chalk.cyan.bold(
-        `\n┌─────────────── PROCESSING SUMMARY ────────────────┐`,
+      chalk.cyan.bold(`\n─────────────── PROCESSING SUMMARY ────────────────`),
+    );
+
+    function formatTime(seconds) {
+      const hrs = String(Math.floor(seconds / 3600)).padStart(2, "0");
+      const mins = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
+      const secs = String(Math.floor(seconds % 60)).padStart(2, "0");
+      return `${hrs} hours, ${mins} mins, ${secs} secs`;
+    }
+
+    console.log(
+      chalk.cyan(
+        `Total processing time: ${chalk.yellow(formatTime(processingTime))}`,
       ),
     );
     console.log(
       chalk.cyan(
-        `│ Total processing time: ${chalk.yellow(processingTime.toFixed(2))} seconds`,
+        `AI Model used: ${chalk.magenta(aiModel === "gpt" ? config.gptModel : config.geminiModel)}`,
       ),
     );
+    console.log(chalk.cyan(`Total images: ${chalk.white(stats.total)}`));
     console.log(
       chalk.cyan(
-        `│ AI Model used: ${chalk.magenta(aiModel === "gpt" ? config.gptModel : config.geminiModel)}`,
-      ),
-    );
-    console.log(chalk.cyan(`│ Total images: ${chalk.white(stats.total)}`));
-    console.log(
-      chalk.cyan(
-        `│ Successfully processed: ${chalk.green(stats.success)} images`,
+        `Successfully processed: ${chalk.green(stats.success)} images`,
       ),
     );
     if (stats.failed > 0) {
       console.log(
-        chalk.cyan(`│ Failed to process: ${chalk.red(stats.failed)} images`),
+        chalk.cyan(`Failed to process: ${chalk.red(stats.failed)} images`),
       );
     }
 
     console.log(
-      chalk.cyan.bold(`└─────────────────────────────────────────────────┘\n`),
+      chalk.cyan.bold(`───────────────────────────────────────────────────\n`),
     );
 
     // Pause before returning to main menu
