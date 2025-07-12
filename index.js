@@ -506,9 +506,9 @@ async function showMainMenu() {
         message: "What would you like to do?",
         choices: [
           { name: "📂 Input/Output Settings", value: "inputOutputSettings" },
-          { name: "⚙️  Metadata Settings", value: "metadataSettings" },
+          { name: "⚙️ Metadata Settings", value: "metadataSettings" },
           { name: "🤖 AI Provider Settings", value: "aiSettings" },
-          { name: "▶️ Process Images", value: "processImages" },
+          { name: "🙏🏻 Process Images", value: "processImages" },
           { name: "❌ Exit", value: "exit" },
         ],
       },
@@ -898,12 +898,84 @@ async function processImages() {
     return;
   }
 
+  if (!fs.existsSync(inputDir)) {
+    console.log(chalk.red.bold(`\n┌─────────────── ERROR ────────────────┐`));
+    console.log(
+      chalk.red(`│ Input directory does not exist: ${chalk.yellow(inputDir)}`),
+    );
+    console.log(chalk.red.bold(`└───────────────────────────────────────┘\n`));
+
+    const { tryAgain } = await inquirer.prompt([
+      {
+        type: "list",
+        name: "tryAgain",
+        message: "Input directory does not exist. What would you like to do?",
+        choices: [
+          { name: "📂 Set a new input directory", value: "change" },
+          { name: "⬅️ Back to main menu", value: "back" },
+          { name: "❌ Exit", value: "exit" },
+        ],
+      },
+    ]);
+
+    if (tryAgain === "change") {
+      await setInputDirectory();
+      await processImages(); // Retry after setting new folder
+      return;
+    } else if (tryAgain === "exit") {
+      await exiftool.end();
+      process.exit(0);
+    } else {
+      return; // back to main menu
+    }
+  }
+
+  const imageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
+  const files = fs.readdirSync(inputDir);
+
+  const imageFiles = files.filter((file) => {
+    const ext = path.extname(file).toLowerCase();
+    return imageExtensions.includes(ext);
+  });
+
+  if (imageFiles.length === 0) {
+    console.log(chalk.red.bold(`\n┌─────────────── ERROR ────────────────┐`));
+    console.log(
+      chalk.red(`│ No image files found in: ${chalk.yellow(inputDir)}`),
+    );
+    console.log(chalk.red.bold(`└───────────────────────────────────────┘\n`));
+
+    const { tryAgain } = await inquirer.prompt([
+      {
+        type: "list",
+        name: "tryAgain",
+        message: "No images found. What would you like to do?",
+        choices: [
+          { name: "🔁 Choose a different input folder", value: "change" },
+          { name: "⬅️ Back to main menu", value: "back" },
+          { name: "❌ Exit", value: "exit" },
+        ],
+      },
+    ]);
+
+    if (tryAgain === "change") {
+      await setInputDirectory();
+      await processImages(); // Retry with new folder
+      return;
+    } else if (tryAgain === "exit") {
+      await exiftool.end();
+      process.exit(0);
+    } else {
+      return; // back to main menu
+    }
+  }
+
   // Confirm processing
   const confirmAnswers = await inquirer.prompt([
     {
       type: "confirm",
       name: "proceed",
-      message: `Ready to process all images from ${inputDir} to ${outputDir}?`,
+      message: `Ready to process all images from ${chalk.yellow(inputDir)} to ${chalk.green(outputDir)}?`,
       default: true,
     },
   ]);
@@ -1028,7 +1100,7 @@ async function showMetadataMenu() {
       message: "Metadata Settings:",
       choices: [
         { name: "📏 Set max title characters", value: "setMaxTitleChars" },
-        { name: "🏷️  Set max tags", value: "setMaxTags" },
+        { name: "🏷️ Set max tags", value: "setMaxTags" },
         { name: "🔢 Toggle token usage display", value: "toggleTokenDisplay" },
         { name: "⬅️ Back to main menu", value: "back" },
       ],
