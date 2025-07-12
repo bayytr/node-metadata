@@ -23,8 +23,8 @@ A command-line tool for automatically generating and embedding metadata for stoc
 
 1. Clone this repository:
    ```
-   git clone https://github.com/yourusername/image-metadata-cli.git
-   cd image-metadata-cli
+   git clone https://github.com/yourusername/node-metadata.git
+   cd node-metadata
    ```
 
 2. Install dependencies:
