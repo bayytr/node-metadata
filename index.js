@@ -180,10 +180,10 @@ async function generateMetadataWithGPT(
         {
           role: "system",
           content: `Generate stock image metadata. Return in this exact format:
-{"title": "EXACTLY ${maxTitleChars} chars commercial title",
+{"title": "EXACTLY IN RANGE OF 150 chars (no LESS than that since its CRITICAL) UNTIL ${maxTitleChars} chars (no MORE than that since its CRITICAL) commercial title",
 "tags": [EXACTLY ${maxTags} unique commercial keywords]}
 
-Important: Title MUST BE EXACTLY ${maxTitleChars} chars (no more, no less), Tags MUST BE EXACTLY ${maxTags} keywords (no more, no less), DONT USE SYMBOL OR PUNCTUATION MARKS`,
+Important: Title MUST BE IN RANGE of 150 chars (no LESS than that since its CRITICAL) UNTIL ${maxTitleChars} chars (no MORE than that since its CRITICAL), Tags MUST BE EXACTLY ${maxTags} keywords (no more, no less), DONT USE SYMBOL OR PUNCTUATION MARKS`,
         },
         {
           role: "user",
@@ -202,6 +202,8 @@ Important: Title MUST BE EXACTLY ${maxTitleChars} chars (no more, no less), Tags
         },
       ],
       max_tokens: 1000,
+      temperature: 0.3, // Lower temperature for more consistent results
+      top_p: 0.8, // Diverse but focused output
     });
 
     const metadataText = response.choices[0].message.content;
@@ -258,13 +260,19 @@ async function generateMetadataWithGemini(
 
     // Initialize Gemini API
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: config.geminiModel });
+    const model = genAI.getGenerativeModel({
+      model: config.geminiModel,
+      generationConfig: {
+        temperature: 0.4, // Lower temperature for more consistent results
+        topP: 0.6, // Diverse but focused output
+      },
+    });
 
     const prompt = `Generate stock image metadata. Return in this exact format:
-    {"title": "EXACTLY MINIMUM 100 chars and MAXIMUM ${maxTitleChars} chars commercial title",
+    {"title": "EXACTLY IN RANGE OF 150 chars (no LESS than that since its CRITICAL) UNTIL ${maxTitleChars} chars (no MORE than that since its CRITICAL) commercial title",
     "tags": [EXACTLY ${maxTags} unique commercial keywords]}
 
-    Important: Title MUST BE MINIMUM 100 chars and MAXIMUM ${maxTitleChars} chars, Tags MUST BE EXACTLY ${maxTags} keywords (no more, no less), NO SYMBOLS OR PUNCTUATION`;
+    Important: Title MUST BE IN RANGE of 150 chars (no LESS than that since its CRITICAL) UNTIL ${maxTitleChars} chars (no MORE than that since its CRITICAL), Tags MUST BE EXACTLY ${maxTags} keywords (no more, no less), NO SYMBOLS OR PUNCTUATION`;
 
     // const imageBuffer = Buffer.from(base64Image, "base64");
 
@@ -364,12 +372,21 @@ async function processAllImages(
   maxTitleChars,
   maxTags,
 ) {
+  // Initialize statistics object
+  const stats = {
+    total: 0,
+    success: 0,
+    failed: 0,
+  };
+
   try {
     const files = await fs.promises.readdir(inputDir);
     const imageFiles = files.filter((file) => {
       const ext = path.extname(file).toLowerCase();
       return [".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(ext);
     });
+
+    stats.total = imageFiles.length;
 
     if (imageFiles.length === 0) {
       console.log(
@@ -457,37 +474,22 @@ async function processAllImages(
         }
 
         successCount++;
+        stats.success++;
       } catch (error) {
         console.error(
           chalk.red(`✗ Failed to process ${file}: ${error.message}`),
         );
         failCount++;
+        stats.failed++;
       }
     }
-
-    console.log(
-      chalk.blue.bold(
-        `\n┌─────────────── PROCESSING COMPLETE ────────────────┐`,
-      ),
-    );
-    console.log(
-      chalk.blue(
-        `│ ${chalk.green(successCount)} images processed successfully`,
-      ),
-    );
-    if (failCount > 0) {
-      console.log(
-        chalk.blue(`│ ${chalk.red(failCount)} images failed to process`),
-      );
-    }
-    console.log(
-      chalk.blue.bold(`└────────────────────────────────────────────────┘\n`),
-    );
   } catch (error) {
     console.log(chalk.red.bold(`\n┌─────────────── ERROR ────────────────┐`));
     console.log(chalk.red(`│ Error processing images: ${error.message}`));
     console.log(chalk.red.bold(`└───────────────────────────────────────┘\n`));
   }
+
+  return stats;
 }
 
 // Main menu function
@@ -865,6 +867,7 @@ async function toggleTokenDisplay() {
 
 // Process images
 async function processImages() {
+  console.clear();
   const inputDir = config.inputDir;
   const outputDir = config.outputDir;
   const aiModel = config.aiModel;
@@ -906,7 +909,30 @@ async function processImages() {
   ]);
 
   if (confirmAnswers.proceed) {
-    await processAllImages(
+    console.clear();
+    console.log(
+      chalk.blue.bold(
+        `\n┌─────────────── PROCESSING STARTED ────────────────┐`,
+      ),
+    );
+    console.log(
+      chalk.blue(`│ Processing images from: ${chalk.green(inputDir)}`),
+    );
+    console.log(chalk.blue(`│ Output directory: ${chalk.green(outputDir)}`));
+    console.log(
+      chalk.blue(
+        `│ Using AI: ${chalk.magenta(aiModel === "gpt" ? config.gptModel : config.geminiModel)}`,
+      ),
+    );
+    console.log(
+      chalk.blue.bold(
+        `└────────────────────────────────────────────────────┘\n`,
+      ),
+    );
+
+    const startTime = new Date();
+
+    const stats = await processAllImages(
       inputDir,
       outputDir,
       aiModel,
@@ -914,6 +940,52 @@ async function processImages() {
       maxTitleChars,
       maxTags,
     );
+
+    const endTime = new Date();
+    const processingTime = (endTime - startTime) / 1000; // Convert to seconds
+
+    // Clear screen for summary
+    console.clear();
+
+    console.log(
+      chalk.cyan.bold(
+        `\n┌─────────────── PROCESSING SUMMARY ────────────────┐`,
+      ),
+    );
+    console.log(
+      chalk.cyan(
+        `│ Total processing time: ${chalk.yellow(processingTime.toFixed(2))} seconds`,
+      ),
+    );
+    console.log(
+      chalk.cyan(
+        `│ AI Model used: ${chalk.magenta(aiModel === "gpt" ? config.gptModel : config.geminiModel)}`,
+      ),
+    );
+    console.log(chalk.cyan(`│ Total images: ${chalk.white(stats.total)}`));
+    console.log(
+      chalk.cyan(
+        `│ Successfully processed: ${chalk.green(stats.success)} images`,
+      ),
+    );
+    if (stats.failed > 0) {
+      console.log(
+        chalk.cyan(`│ Failed to process: ${chalk.red(stats.failed)} images`),
+      );
+    }
+
+    console.log(
+      chalk.cyan.bold(`└─────────────────────────────────────────────────┘\n`),
+    );
+
+    // Pause before returning to main menu
+    await inquirer.prompt([
+      {
+        type: "input",
+        name: "continue",
+        message: chalk.yellow("Press Enter to return to the main menu..."),
+      },
+    ]);
   }
 }
 
