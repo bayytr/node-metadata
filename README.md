@@ -32,7 +32,12 @@ A command-line tool for automatically generating and embedding metadata for stoc
    npm install
    ```
 
-3. Make the CLI executable (optional):
+3. Run the CLI tool:
+   ```
+   npm start
+   ```
+
+4. Make the CLI executable (optional):
    ```
    npm link
    ```
