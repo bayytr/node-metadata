@@ -63,6 +63,45 @@ console.log(
 );
 console.log(chalk.yellow("Generate metadata for your stock images using AI\n"));
 
+// Function to display current configuration
+function displayCurrentConfig() {
+  const inputStatus = config.inputDir
+    ? chalk.green(config.inputDir)
+    : chalk.yellow("Not set");
+  const outputStatus = config.outputDir
+    ? chalk.green(config.outputDir)
+    : chalk.yellow("Not set");
+
+  console.log(
+    chalk.cyan.bold("┌─────────────── CURRENT CONFIGURATION ───────────────┐"),
+  );
+  console.log(chalk.cyan(`│ Input Directory:   ${inputStatus}`));
+  console.log(chalk.cyan(`│ Output Directory:  ${outputStatus}`));
+  console.log(
+    chalk.cyan(`│ Max Title Chars:   ${chalk.green(config.maxTitleChars)}`),
+  );
+  console.log(
+    chalk.cyan(`│ Max Tags:          ${chalk.green(config.maxTags)}`),
+  );
+  console.log(
+    chalk.cyan(
+      `│ AI Provider:       ${config.aiModel === "gpt" ? chalk.blue("OpenAI GPT") : chalk.green("Google Gemini")}`,
+    ),
+  );
+  const modelName =
+    config.aiModel === "gpt" ? config.gptModel : config.geminiModel;
+  console.log(chalk.cyan(`│ AI Model:          ${chalk.magenta(modelName)}`));
+  console.log(
+    chalk.cyan(
+      `│ Show Token Usage:  ${config.showTokens ? chalk.green("Enabled") : chalk.yellow("Disabled")}`,
+    ),
+  );
+  console.log(
+    chalk.cyan.bold("└───────────────────────────────────────────────────┘"),
+  );
+  console.log("");
+}
+
 // Utility function to check if directory exists
 const directoryExists = (dirPath) => {
   try {
@@ -141,10 +180,10 @@ async function generateMetadataWithGPT(
         {
           role: "system",
           content: `Generate stock image metadata. Return in this exact format:
-          {"title": "MINIMUM 150 chars and MAXIMUM ${maxTitleChars} chars commercial title",
-          "tags": [EXACTLY ${maxTags} unique commercial keywords]}
+{"title": "EXACTLY ${maxTitleChars} chars commercial title",
+"tags": [EXACTLY ${maxTags} unique commercial keywords]}
 
-          Important: Title MINIMUM 150 chars and MAXIMUM ${maxTitleChars} chars, Tags MUST BE EXACTLY ${maxTags} keywords (no more, no less), NO SYMBOLS OR PUNCTUATION`,
+Important: Title MUST BE EXACTLY ${maxTitleChars} chars (no more, no less), Tags MUST BE EXACTLY ${maxTags} keywords (no more, no less), DONT USE SYMBOL OR PUNCTUATION MARKS`,
         },
         {
           role: "user",
@@ -188,9 +227,6 @@ async function generateMetadataWithGPT(
       }
     }
 
-    // Validate metadata
-    metadata = validateAndFixMetadata(metadata, maxTitleChars, maxTags);
-
     // Add token usage information to metadata
     metadata.tokenInfo = tokensUsed;
 
@@ -225,10 +261,10 @@ async function generateMetadataWithGemini(
     const model = genAI.getGenerativeModel({ model: config.geminiModel });
 
     const prompt = `Generate stock image metadata. Return in this exact format:
-    {"title": "MINIMUM 150 chars and MAXIMUM ${maxTitleChars} chars commercial title",
+    {"title": "EXACTLY MINIMUM 100 chars and MAXIMUM ${maxTitleChars} chars commercial title",
     "tags": [EXACTLY ${maxTags} unique commercial keywords]}
 
-    Important: Title MUST BE MINIMUM 150 chars and MAXIMUM ${maxTitleChars} chars, Tags MUST BE EXACTLY ${maxTags} keywords (no more, no less), NO SYMBOLS OR PUNCTUATION`;
+    Important: Title MUST BE MINIMUM 100 chars and MAXIMUM ${maxTitleChars} chars, Tags MUST BE EXACTLY ${maxTags} keywords (no more, no less), NO SYMBOLS OR PUNCTUATION`;
 
     // const imageBuffer = Buffer.from(base64Image, "base64");
 
@@ -336,12 +372,28 @@ async function processAllImages(
     });
 
     if (imageFiles.length === 0) {
-      console.log(chalk.yellow("No image files found in the input directory."));
+      console.log(
+        chalk.yellow.bold(`\n┌─────────────── WARNING ────────────────┐`),
+      );
+      console.log(
+        chalk.yellow(`│ No image files found in the input directory.`),
+      );
+      console.log(
+        chalk.yellow.bold(`└────────────────────────────────────────┘\n`),
+      );
       return;
     }
 
     console.log(
-      chalk.blue(`Found ${imageFiles.length} image files to process.`),
+      chalk.blue.bold(`\n┌─────────────── PROCESSING IMAGES ────────────────┐`),
+    );
+    console.log(
+      chalk.blue(
+        `│ Found ${chalk.green(imageFiles.length)} image files to process.`,
+      ),
+    );
+    console.log(
+      chalk.blue.bold(`└───────────────────────────────────────────────┘\n`),
     );
 
     let successCount = 0;
@@ -389,9 +441,9 @@ async function processAllImages(
 
         // Display token usage if available
         if (config.showTokens && metadata.tokenInfo) {
-          console.log(chalk.blue(`  Token usage:`));
+          console.log(chalk.blue.bold(`  Token usage:`));
           Object.entries(metadata.tokenInfo).forEach(([key, value]) => {
-            console.log(chalk.blue(`    ${key}: ${value}`));
+            console.log(chalk.blue(`    ├─ ${key}: ${chalk.yellow(value)}`));
           });
         }
 
@@ -399,7 +451,7 @@ async function processAllImages(
         if (metadata.title.length < 150) {
           console.log(
             chalk.yellow(
-              `  Note: Title length (${metadata.title.length}) is shorter than recommended minimum (150 chars).`,
+              `  ⚠️ Note: Title length (${metadata.title.length}) is shorter than recommended minimum (150 chars).`,
             ),
           );
         }
@@ -414,72 +466,77 @@ async function processAllImages(
     }
 
     console.log(
-      chalk.blue(
-        `\nProcessing completed: ${successCount} succeeded, ${failCount} failed.`,
+      chalk.blue.bold(
+        `\n┌─────────────── PROCESSING COMPLETE ────────────────┐`,
       ),
     );
+    console.log(
+      chalk.blue(
+        `│ ${chalk.green(successCount)} images processed successfully`,
+      ),
+    );
+    if (failCount > 0) {
+      console.log(
+        chalk.blue(`│ ${chalk.red(failCount)} images failed to process`),
+      );
+    }
+    console.log(
+      chalk.blue.bold(`└────────────────────────────────────────────────┘\n`),
+    );
   } catch (error) {
-    console.error(chalk.red(`Error processing images: ${error.message}`));
+    console.log(chalk.red.bold(`\n┌─────────────── ERROR ────────────────┐`));
+    console.log(chalk.red(`│ Error processing images: ${error.message}`));
+    console.log(chalk.red.bold(`└───────────────────────────────────────┘\n`));
   }
 }
 
 // Main menu function
 async function showMainMenu() {
   try {
+    // Clear screen and display current configuration
+    console.clear();
+    displayCurrentConfig();
+
     const answers = await inquirer.prompt([
       {
         type: "list",
         name: "action",
         message: "What would you like to do?",
         choices: [
-          { name: "📁 Set input directory", value: "setInputDir" },
-          { name: "📁 Set output directory", value: "setOutputDir" },
-          { name: "📏 Set max title characters", value: "setMaxTitleChars" },
-          { name: "🏷️ Set max tags", value: "setMaxTags" },
-          { name: "🔑 Set API keys", value: "setApiKeys" },
-          { name: "🤖 Select AI to Use", value: "selectAiModel" },
-          { name: "📊 Select Model to Use", value: "selectSpecificModel" },
-          {
-            name: "🔢 Toggle token usage display",
-            value: "toggleTokenDisplay",
-          },
-          { name: "▶️ Process images", value: "processImages" },
+          { name: "📂 Input/Output Settings", value: "inputOutputSettings" },
+          { name: "⚙️  Metadata Settings", value: "metadataSettings" },
+          { name: "🤖 AI Provider Settings", value: "aiSettings" },
+          { name: "▶️ Process Images", value: "processImages" },
           { name: "❌ Exit", value: "exit" },
         ],
       },
     ]);
 
     switch (answers.action) {
-      case "setInputDir":
-        await setInputDirectory();
+      case "inputOutputSettings":
+        await showInputOutputMenu();
         break;
-      case "setOutputDir":
-        await setOutputDirectory();
+      case "metadataSettings":
+        await showMetadataMenu();
         break;
-      case "setMaxTitleChars":
-        await setMaxTitleChars();
-        break;
-      case "setMaxTags":
-        await setMaxTags();
-        break;
-      case "setApiKeys":
-        await setApiKeys();
-        break;
-      case "selectAiModel":
-        await selectAiModel();
-        break;
-      case "selectSpecificModel":
-        await selectSpecificModel();
-        break;
-      case "toggleTokenDisplay":
-        await toggleTokenDisplay();
+      case "aiSettings":
+        await showAiMenu();
         break;
       case "processImages":
         await processImages();
         break;
       case "exit":
         console.log(
-          chalk.cyan("Thank you for using Image Metadata CLI. Goodbye!"),
+          chalk.cyan.bold("\n┌─────────────────────────────────────────┐"),
+        );
+        console.log(
+          chalk.cyan.bold("│  Thank you for using Image Metadata CLI  │"),
+        );
+        console.log(
+          chalk.cyan.bold("│              Goodbye!                    │"),
+        );
+        console.log(
+          chalk.cyan.bold("└─────────────────────────────────────────┘\n"),
         );
         await exiftool.end();
         process.exit(0);
@@ -507,7 +564,19 @@ async function setInputDirectory() {
 
   config.inputDir = answers.inputDir;
   saveConfig();
-  console.log(chalk.green(`Input directory set to: ${answers.inputDir}`));
+  console.log(
+    chalk.cyan.bold(
+      `\n┌─────────────── INPUT DIRECTORY UPDATED ────────────────┐`,
+    ),
+  );
+  console.log(
+    chalk.cyan(`│ Input directory set to: ${chalk.green(answers.inputDir)}`),
+  );
+  console.log(
+    chalk.cyan.bold(
+      `└───────────────────────────────────────────────────────┘\n`,
+    ),
+  );
 }
 
 // Set output directory
@@ -536,7 +605,19 @@ async function setOutputDirectory() {
 
   config.outputDir = answers.outputDir;
   saveConfig();
-  console.log(chalk.green(`Output directory set to: ${answers.outputDir}`));
+  console.log(
+    chalk.cyan.bold(
+      `\n┌─────────────── OUTPUT DIRECTORY UPDATED ────────────────┐`,
+    ),
+  );
+  console.log(
+    chalk.cyan(`│ Output directory set to: ${chalk.green(answers.outputDir)}`),
+  );
+  console.log(
+    chalk.cyan.bold(
+      `└────────────────────────────────────────────────────────┘\n`,
+    ),
+  );
 }
 
 // Set max title characters
@@ -559,7 +640,17 @@ async function setMaxTitleChars() {
   config.maxTitleChars = answers.maxTitleChars;
   saveConfig();
   console.log(
-    chalk.green(`Maximum title characters set to: ${answers.maxTitleChars}`),
+    chalk.cyan.bold(
+      `\n┌─────────────── TITLE LENGTH UPDATED ────────────────┐`,
+    ),
+  );
+  console.log(
+    chalk.cyan(
+      `│ Maximum title characters set to: ${chalk.green(answers.maxTitleChars)}`,
+    ),
+  );
+  console.log(
+    chalk.cyan.bold(`└───────────────────────────────────────────────────┘\n`),
   );
 }
 
@@ -582,7 +673,15 @@ async function setMaxTags() {
 
   config.maxTags = answers.maxTags;
   saveConfig();
-  console.log(chalk.green(`Maximum tags set to: ${answers.maxTags}`));
+  console.log(
+    chalk.cyan.bold(`\n┌─────────────── TAG COUNT UPDATED ────────────────┐`),
+  );
+  console.log(
+    chalk.cyan(`│ Maximum tags set to: ${chalk.green(answers.maxTags)}`),
+  );
+  console.log(
+    chalk.cyan.bold(`└────────────────────────────────────────────────┘\n`),
+  );
 }
 
 // Set API keys
@@ -607,7 +706,13 @@ async function setApiKeys() {
   config.gptApiKey = answers.gptApiKey;
   config.geminiApiKey = answers.geminiApiKey;
   saveConfig();
-  console.log(chalk.green("API keys saved successfully"));
+  console.log(
+    chalk.cyan.bold(`\n┌─────────────── API KEYS UPDATED ────────────────┐`),
+  );
+  console.log(chalk.cyan(`│ API keys saved successfully`));
+  console.log(
+    chalk.cyan.bold(`└────────────────────────────────────────────────┘\n`),
+  );
 }
 
 // Select AI model
@@ -627,10 +732,16 @@ async function selectAiModel() {
 
   config.aiModel = answers.aiModel;
   saveConfig();
+  const aiName =
+    answers.aiModel === "gpt"
+      ? chalk.blue("OpenAI GPT")
+      : chalk.green("Google Gemini");
   console.log(
-    chalk.green(
-      `AI set to: ${answers.aiModel === "gpt" ? "OpenAI GPT" : "Google Gemini"}`,
-    ),
+    chalk.cyan.bold(`\n┌─────────────── AI PROVIDER UPDATED ────────────────┐`),
+  );
+  console.log(chalk.cyan(`│ AI Provider set to: ${aiName}`));
+  console.log(
+    chalk.cyan.bold(`└───────────────────────────────────────────────────┘\n`),
   );
 }
 
@@ -682,6 +793,9 @@ async function selectSpecificModel() {
         name: "geminiModel",
         message: "Select the Gemini model to use:",
         choices: [
+          { name: "Gemini 2.5 Pro", value: "gemini-2.5-pro" },
+          { name: "Gemini 2.5 Flash", value: "gemini-2.5-flash" },
+          { name: "Gemini 2.0 Flash", value: "gemini-2.0-flash" },
           { name: "Gemini 1.5 Flash", value: "gemini-1.5-flash" },
           { name: "Gemini 1.5 Pro", value: "gemini-1.5-pro" },
         ],
@@ -691,7 +805,17 @@ async function selectSpecificModel() {
 
     config.geminiModel = answers.geminiModel;
     saveConfig();
-    console.log(chalk.green(`Gemini model set to: ${answers.geminiModel}`));
+    console.log(
+      chalk.cyan.bold(`\n┌─────────────── MODEL UPDATED ────────────────┐`),
+    );
+    console.log(
+      chalk.cyan(
+        `│ Gemini model set to: ${chalk.magenta(answers.geminiModel)}`,
+      ),
+    );
+    console.log(
+      chalk.cyan.bold(`└───────────────────────────────────────────────┘\n`),
+    );
   } else {
     const answers = await inquirer.prompt([
       {
@@ -710,7 +834,15 @@ async function selectSpecificModel() {
 
     config.gptModel = answers.gptModel;
     saveConfig();
-    console.log(chalk.green(`GPT model set to: ${answers.gptModel}`));
+    console.log(
+      chalk.cyan.bold(`\n┌─────────────── MODEL UPDATED ────────────────┐`),
+    );
+    console.log(
+      chalk.cyan(`│ GPT model set to: ${chalk.magenta(answers.gptModel)}`),
+    );
+    console.log(
+      chalk.cyan.bold(`└───────────────────────────────────────────────┘\n`),
+    );
   }
 }
 
@@ -719,9 +851,15 @@ async function toggleTokenDisplay() {
   config.showTokens = !config.showTokens;
   saveConfig();
   console.log(
-    chalk.green(
-      `Token usage display: ${config.showTokens ? "Enabled" : "Disabled"}`,
+    chalk.cyan.bold(`\n┌─────────────── TOKEN DISPLAY ────────────────┐`),
+  );
+  console.log(
+    chalk.cyan(
+      `│ Token usage display: ${config.showTokens ? chalk.green("Enabled") : chalk.yellow("Disabled")}`,
     ),
+  );
+  console.log(
+    chalk.cyan.bold(`└────────────────────────────────────────────┘\n`),
   );
 }
 
@@ -730,26 +868,30 @@ async function processImages() {
   const inputDir = config.inputDir;
   const outputDir = config.outputDir;
   const aiModel = config.aiModel;
-  const maxTitleChars = config.maxTitleChars;
-  const maxTags = config.maxTags;
+  const maxTitleChars = parseInt(config.maxTitleChars);
+  const maxTags = parseInt(config.maxTags);
 
   // Validate configuration
   if (!inputDir || !outputDir) {
+    console.log(chalk.red.bold(`\n┌─────────────── ERROR ────────────────┐`));
     console.log(
       chalk.red(
-        "Please set both input and output directories before processing.",
+        `│ Please set both input and output directories before processing.`,
       ),
     );
+    console.log(chalk.red.bold(`└───────────────────────────────────────┘\n`));
     return;
   }
 
   const apiKey = aiModel === "gpt" ? config.gptApiKey : config.geminiApiKey;
   if (!apiKey) {
+    console.log(chalk.red.bold(`\n┌─────────────── ERROR ────────────────┐`));
     console.log(
       chalk.red(
-        `Please set the ${aiModel === "gpt" ? "GPT" : "Gemini"} API key before processing.`,
+        `│ Please set the ${aiModel === "gpt" ? "GPT" : "Gemini"} API key before processing.`,
       ),
     );
+    console.log(chalk.red.bold(`└───────────────────────────────────────┘\n`));
     return;
   }
 
@@ -773,6 +915,104 @@ async function processImages() {
       maxTags,
     );
   }
+}
+
+// Input/Output Settings Menu
+async function showInputOutputMenu() {
+  const answers = await inquirer.prompt([
+    {
+      type: "list",
+      name: "action",
+      message: "Input/Output Settings:",
+      choices: [
+        { name: "📁 Set input directory", value: "setInputDir" },
+        { name: "📁 Set output directory", value: "setOutputDir" },
+        { name: "⬅️ Back to main menu", value: "back" },
+      ],
+    },
+  ]);
+
+  switch (answers.action) {
+    case "setInputDir":
+      await setInputDirectory();
+      break;
+    case "setOutputDir":
+      await setOutputDirectory();
+      break;
+    case "back":
+      return; // Return to main menu
+  }
+
+  // Show this menu again
+  await showInputOutputMenu();
+}
+
+// Metadata Settings Menu
+async function showMetadataMenu() {
+  const answers = await inquirer.prompt([
+    {
+      type: "list",
+      name: "action",
+      message: "Metadata Settings:",
+      choices: [
+        { name: "📏 Set max title characters", value: "setMaxTitleChars" },
+        { name: "🏷️  Set max tags", value: "setMaxTags" },
+        { name: "🔢 Toggle token usage display", value: "toggleTokenDisplay" },
+        { name: "⬅️ Back to main menu", value: "back" },
+      ],
+    },
+  ]);
+
+  switch (answers.action) {
+    case "setMaxTitleChars":
+      await setMaxTitleChars();
+      break;
+    case "setMaxTags":
+      await setMaxTags();
+      break;
+    case "toggleTokenDisplay":
+      await toggleTokenDisplay();
+      break;
+    case "back":
+      return; // Return to main menu
+  }
+
+  // Show this menu again
+  await showMetadataMenu();
+}
+
+// AI Settings Menu
+async function showAiMenu() {
+  const answers = await inquirer.prompt([
+    {
+      type: "list",
+      name: "action",
+      message: "AI Provider Settings:",
+      choices: [
+        { name: "🔑 Set API keys", value: "setApiKeys" },
+        { name: "🤖 Select AI to Use", value: "selectAiModel" },
+        { name: "📊 Select Model to Use", value: "selectSpecificModel" },
+        { name: "⬅️ Back to main menu", value: "back" },
+      ],
+    },
+  ]);
+
+  switch (answers.action) {
+    case "setApiKeys":
+      await setApiKeys();
+      break;
+    case "selectAiModel":
+      await selectAiModel();
+      break;
+    case "selectSpecificModel":
+      await selectSpecificModel();
+      break;
+    case "back":
+      return; // Return to main menu
+  }
+
+  // Show this menu again
+  await showAiMenu();
 }
 
 // Start the application

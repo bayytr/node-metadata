@@ -2,9 +2,11 @@
 
 A command-line tool for automatically generating and embedding metadata for stock images using AI (OpenAI GPT or Google Gemini).
 
+![Image Metadata CLI](https://example.com/screenshot.png)
+
 ## Features
 
-- Interactive CLI menu with colorful interface
+- Interactive CLI menu with colorful interface and hierarchical navigation
 - Automatic title and tags generation using AI
 - Support for both OpenAI GPT and Google Gemini with selectable models
   - Gemini: gemini-1.5-flash, gemini-1.5-pro
@@ -12,7 +14,7 @@ A command-line tool for automatically generating and embedding metadata for stoc
 - Image compression before sending to AI APIs
 - Token-efficient AI prompts optimized for microstock platforms with precise format
 - Token usage tracking and display for AI requests
-- Character count and keyword statistics
+- Character count and keyword statistics with title length feedback
 - Persistent configuration saved in a JSON file
 - Metadata embedding using exiftool
 - Progress tracking with spinners
@@ -57,14 +59,24 @@ image-metadata-cli
 
 ### Setup
 
-1. Set the input directory containing your images
-2. Set the output directory where processed images will be saved
-3. Configure max title characters (default: 200) and max tags (default: 45)
-4. Enter your API keys for OpenAI and/or Google Gemini
-5. Select which AI to use (GPT or Gemini)
-6. Select specific model for the chosen AI
-7. Toggle token usage display
-8. Process your images
+The application shows your current configuration at startup and offers an organized menu structure:
+
+1. **Input/Output Settings**
+   - Set input directory containing your images
+   - Set output directory where processed images will be saved
+
+2. **Metadata Settings**
+   - Configure max title characters (default: 200)
+   - Configure max tags (default: 45)
+   - Toggle token usage display
+
+3. **AI Provider Settings**
+   - Enter your API keys for OpenAI and/or Google Gemini
+   - Select which AI to use (GPT or Gemini)
+   - Select specific model for the chosen AI
+
+4. **Process Images**
+   - Run the metadata generation process
 
 ### How It Works
 
@@ -86,6 +98,8 @@ Your settings are saved in a `image-metadata-config.json` file in the directory 
 - Selected AI provider (GPT or Gemini)
 - Selected model for each AI provider
 - Token usage display preference
+
+The current configuration is displayed at the top of the menu for easy reference.
 
 ## API Keys
 
