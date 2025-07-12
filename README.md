@@ -2,7 +2,7 @@
 
 A command-line tool for automatically generating and embedding metadata for stock images using AI (OpenAI GPT or Google Gemini).
 
-![Image Metadata CLI](https://example.com/screenshot.png)
+![Image Metadata CLI](https://apps.codepolitan.com/sites/learn/uploads/original/202308/salammeme.png)
 
 ## Features
 
