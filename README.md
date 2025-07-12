@@ -9,7 +9,7 @@ A command-line tool for automatically generating and embedding metadata for stoc
 - Interactive CLI menu with colorful interface and hierarchical navigation
 - Automatic title and tags generation using AI
 - Support for both OpenAI GPT and Google Gemini with selectable models
-  - Gemini: gemini-1.5-flash, gemini-1.5-pro
+  - Gemini: gemini-1.5-flash, gemini-1.5-pro, "Gemini 2.0 Flash, Gemini 2.5 Flash, Gemini 2.5 Pro
   - GPT: gpt-4-vision-preview, gpt-4.1-mini, gpt-4.1-nano, o4-mini
 - Image compression before sending to AI APIs
 - Token-efficient AI prompts optimized for microstock platforms with precise format
