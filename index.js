@@ -16,16 +16,18 @@ const configFilePath = path.join(process.cwd(), "image-metadata-config.json");
 
 // Default configuration
 const defaultConfig = {
-  inputDir: "",
-  outputDir: "",
+  inputDir: "images/input", // default input directory
+  outputDir: "images/output", // default output directory 
   maxTitleChars: 200,
   maxTags: 45,
   gptApiKey: "",
   geminiApiKey: "",
   aiModel: "gemini", // default AI model
   geminiModel: "gemini-1.5-flash", // default Gemini model
-  gptModel: "gpt-4-vision-preview", // default GPT model
+  gptModel: "gpt-4.1-nano", // default GPT model
+//   gptModel: "gpt-4-vision-preview", // default GPT model
   showTokens: true, // default to showing token usage
+  delay: 10, // default delay between requests
 };
 
 // Load or create configuration
@@ -92,6 +94,11 @@ function displayCurrentConfig() {
   console.log(
     chalk.cyan(
       `Show Token Usage:  ${config.showTokens ? chalk.green("Enabled") : chalk.yellow("Disabled")}`,
+    ),
+  );
+  console.log(
+    chalk.cyan(
+      `Request Delay:     ${config.delay > 0 ? chalk.green(`${config.delay} seconds`) : chalk.yellow("Disabled")}`,
     ),
   );
   console.log(
@@ -499,6 +506,12 @@ async function processAllImages(
         failCount++;
         stats.failed++;
       }
+
+      // Add delay between requests (except for the last image)
+      if (i < imageFiles.length - 1 && config.delay > 0) {
+        console.log(chalk.yellow(`⏳ Waiting ${config.delay} seconds before next request...`));
+        await new Promise(resolve => setTimeout(resolve, config.delay * 1000));
+      }
     }
   } catch (error) {
     console.log(chalk.red.bold(`\n─────────────── ERROR ────────────────`));
@@ -861,6 +874,38 @@ async function selectSpecificModel() {
   }
 }
 
+// Set delay between requests
+async function setDelay() {
+  const answers = await inquirer.prompt([
+    {
+      type: "number",
+      name: "delay",
+      message: "Enter the delay in seconds between requests (0 to disable):",
+      default: config.delay,
+      validate: (value) => {
+        if (isNaN(value) || value < 0) {
+          return "Please enter a non-negative number";
+        }
+        return true;
+      },
+    },
+  ]);
+
+  config.delay = answers.delay;
+  saveConfig();
+  console.log(
+    chalk.cyan.bold(`\n─────────────── DELAY UPDATED ────────────────`),
+  );
+  console.log(
+    chalk.cyan(
+      `Delay between requests set to: ${chalk.green(answers.delay)} seconds`,
+    ),
+  );
+  console.log(
+    chalk.cyan.bold(`─────────────────────────────────────────────────\n`),
+  );
+}
+
 // Toggle token display
 async function toggleTokenDisplay() {
   config.showTokens = !config.showTokens;
@@ -1114,6 +1159,7 @@ async function showMetadataMenu() {
       choices: [
         { name: "📏 Set max title characters", value: "setMaxTitleChars" },
         { name: "🏷️ Set max tags", value: "setMaxTags" },
+        { name: "⏱️ Set delay between requests", value: "setDelay" },
         { name: "🔢 Toggle token usage display", value: "toggleTokenDisplay" },
         { name: "⬅️ Back to main menu", value: "back" },
       ],
@@ -1126,6 +1172,9 @@ async function showMetadataMenu() {
       break;
     case "setMaxTags":
       await setMaxTags();
+      break;
+    case "setDelay":
+      await setDelay();
       break;
     case "toggleTokenDisplay":
       await toggleTokenDisplay();
